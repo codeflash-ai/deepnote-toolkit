@@ -149,9 +149,9 @@ def parse_export_data(data: Any, format: SerializationFormat, data_type: str) ->
 
 def _sanitize_function_input_value(value: Any) -> Union[str, List[str]]:
     if oc.utils.is_pandas_dataframe(value):
-        return [str(cell) for cell in value.to_numpy().flatten()]
+        return list(map(str, value.to_numpy().ravel()))
     if isinstance(value, list):
-        return [str(item) for item in value]
+        return list(map(str, value))
     return str(value)
 
 
