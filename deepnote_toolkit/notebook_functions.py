@@ -136,9 +136,18 @@ def parse_export_data(data: Any, format: SerializationFormat, data_type: str) ->
     if format == "json":
         result = json.loads(data)
         if data_type == "DataFrame":
-            return pd.DataFrame(result).reset_index(drop=True)
+            # Avoid extra object copies by resetting index in construction as much as possible
+            df = pd.DataFrame(result)
+            if df.index.equals(pd.RangeIndex(len(df))):
+                return df
+            else:
+                return df.reset_index(drop=True)
         if data_type == "DeepnoteQueryPreview":
-            return DeepnoteQueryPreview(result).reset_index(drop=True)
+            df = DeepnoteQueryPreview(result)
+            if df.index.equals(pd.RangeIndex(len(df))):
+                return df
+            else:
+                return df.reset_index(drop=True)
         return result
 
     if format == "dill":
