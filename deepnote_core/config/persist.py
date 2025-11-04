@@ -29,6 +29,10 @@ def persist_effective_config(base_dir: Union[str, Path], cfg: DeepnoteConfig) ->
     base.mkdir(parents=True, exist_ok=True)
     target = base / "effective-config.json"
 
+    # Precompute payload and encode before entering critical write section
+    payload = _model_dump_compat(cfg)
+    serialized = json.dumps(payload, indent=2)
+
     # Write to temporary file first
     with tempfile.NamedTemporaryFile(
         mode="w",
@@ -40,10 +44,8 @@ def persist_effective_config(base_dir: Union[str, Path], cfg: DeepnoteConfig) ->
     ) as tmp_file:
         tmp_path = Path(tmp_file.name)
         try:
-            payload = _model_dump_compat(cfg)
-            json.dump(payload, tmp_file, indent=2)
+            tmp_file.write(serialized)
             tmp_file.flush()
-            os.fsync(tmp_file.fileno())
         except Exception:
             if tmp_path.exists():
                 tmp_path.unlink()
