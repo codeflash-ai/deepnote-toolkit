@@ -10,3 +10,12 @@ def is_single_select_query(sql_string):
 
     # Check if the query is a SELECT statement
     return parsed_queries[0].get_type() == "SELECT"
+
+
+def is_single_select_query_from_parsed(parsed_queries):
+    # Check if there is only one query in the string
+    if len(parsed_queries) != 1:
+        return False
+
+    # Check if the query is a SELECT statement
+    return parsed_queries[0].get_type() == "SELECT"
