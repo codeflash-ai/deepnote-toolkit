@@ -89,7 +89,7 @@ class DeepnoteElementText(DeepnoteBaseElement):
         self.str = str
 
     def _repr_html_(self):
-        return "<p>" + self.str + "</p>"
+        return f"<p>{self.str}</p>"
 
 
 class DeepnoteElementDivider(DeepnoteBaseElement):
