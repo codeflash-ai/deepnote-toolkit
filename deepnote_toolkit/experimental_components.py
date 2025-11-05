@@ -288,7 +288,7 @@ def title(str):
 
 
 def header():
-    return h2(str)
+    return DeepnoteElementH2(str)
 
 
 def subheader():
