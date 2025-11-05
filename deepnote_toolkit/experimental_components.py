@@ -79,7 +79,7 @@ class DeepnoteElementCode(DeepnoteBaseElement):
         self.str = str
 
     def _repr_html_(self):
-        return "<pre>" + self.str + "</pre>"
+        return f"<pre>{self.str}</pre>"
 
 
 class DeepnoteElementText(DeepnoteBaseElement):
