@@ -7,6 +7,12 @@ import deepnote_toolkit.ocelots as oc
 from deepnote_toolkit.ocelots.data_preview import DataPreview
 from deepnote_toolkit.sql.query_preview import DeepnoteQueryPreview
 
+_DataFrameType = getattr(oc, "DataFrame")
+
+_DataPreviewType = DataPreview
+
+_DeepnoteQueryPreviewType = DeepnoteQueryPreview
+
 OutputType = Literal["dataframe", "query_preview", "data_preview"]
 
 
@@ -159,14 +165,16 @@ def _normalize_output_type(x: Any) -> OutputType:
     Returns the type of the dataframe ("query_preview" or "dataframe").
     Each type is rendered differently in the webapp.
     """
-    if isinstance(x, oc.DataFrame):
-        if x.native_type == "pandas" and isinstance(
-            x.to_native(), DeepnoteQueryPreview
-        ):
-            return "query_preview"
+    if isinstance(x, _DataFrameType):
+        # Locally cache attribute access for repeated use
+        native_type = getattr(x, "native_type", None)
+        if native_type == "pandas":
+            native = x.to_native()
+            if isinstance(native, _DeepnoteQueryPreviewType):
+                return "query_preview"
         return "dataframe"
 
-    if isinstance(x, DataPreview):
+    if isinstance(x, _DataPreviewType):
         return "data_preview"
 
     raise ValueError(f"Object of type {type(x)} is not valid output type")

@@ -1,20 +1,8 @@
 from __future__ import annotations
 
 import io
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    Dict,
-    Generic,
-    List,
-    Literal,
-    Optional,
-    TextIO,
-    Tuple,
-    TypeVar,
-    Union,
-    overload,
-)
+from typing import (TYPE_CHECKING, Any, Dict, Generic, List, Literal, Optional,
+                    TextIO, Tuple, TypeVar, Union, overload)
 
 from typing_extensions import Self, TypeGuard
 
@@ -23,23 +11,16 @@ if TYPE_CHECKING:
 
 from deepnote_toolkit.ocelots.filters import Filter
 from deepnote_toolkit.ocelots.pandas.implementation import PandasImplementation
-from deepnote_toolkit.ocelots.pyspark.implementation import PysparkImplementation
-from deepnote_toolkit.ocelots.types import (
-    Column,
-    ColumnsStatsRecord,
-    NativeInputDF,
-    NativeOutputDF,
-    NativeOutputType,
-    PandasDF,
-    PandasOnSparkDF,
-    PysparkDF,
-    UnsupportedDataFrameException,
-)
-from deepnote_toolkit.ocelots.utils import (
-    is_pandas_dataframe,
-    is_pandas_on_spark_dataframe,
-    is_pyspark_dataframe,
-)
+from deepnote_toolkit.ocelots.pyspark.implementation import \
+    PysparkImplementation
+from deepnote_toolkit.ocelots.types import (Column, ColumnsStatsRecord,
+                                            NativeInputDF, NativeOutputDF,
+                                            NativeOutputType, PandasDF,
+                                            PandasOnSparkDF, PysparkDF,
+                                            UnsupportedDataFrameException)
+from deepnote_toolkit.ocelots.utils import (is_pandas_dataframe,
+                                            is_pandas_on_spark_dataframe,
+                                            is_pyspark_dataframe)
 
 Implementation = Union[PandasImplementation, PysparkImplementation]
 
@@ -130,9 +111,8 @@ class DataFrame(Generic[T]):
 
             # NOTE: we construct new instance here, so we need to transfer data preview (if there is any) manually
             # Local import to avoid cyclic import at top level
-            from deepnote_toolkit.ocelots.data_preview import (
-                DeepnoteDataFrameWithDataPreview,
-            )
+            from deepnote_toolkit.ocelots.data_preview import \
+                DeepnoteDataFrameWithDataPreview
 
             if isinstance(df, DeepnoteDataFrameWithDataPreview):
                 data_preview = df.deepnote_data_preview
@@ -177,9 +157,8 @@ class DataFrame(Generic[T]):
     @property
     def data_preview(self) -> Optional["DataPreview"]:
         # Local import to avoid cyclic import at top level
-        from deepnote_toolkit.ocelots.data_preview import (
-            DeepnoteDataFrameWithDataPreview,
-        )
+        from deepnote_toolkit.ocelots.data_preview import \
+            DeepnoteDataFrameWithDataPreview
 
         native_df = self.to_native()
         if isinstance(native_df, DeepnoteDataFrameWithDataPreview):
