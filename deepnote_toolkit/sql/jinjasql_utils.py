@@ -1,9 +1,12 @@
+import functools
 import re
 
 import __main__
 from jinja2 import meta
 
 from .jinjasql import JinjaSql
+
+_escaped_percent_re = re.compile(r"(?<=[^{])%(?=[^}])")
 
 
 def render_jinja_sql_template(template, param_style=None):
@@ -20,17 +23,27 @@ def render_jinja_sql_template(template, param_style=None):
     """
 
     escaped_template = _escape_jinja_template(template)
-
-    jinja_sql = JinjaSql(
-        param_style=param_style if param_style is not None else "pyformat"
+    # Cache JinjaSql object by param_style, which determines env object and identity
+    _jinja_sql_cache = render_jinja_sql_template.__dict__.setdefault(
+        "_jinja_sql_cache", {}
     )
-    parsed_content = jinja_sql.env.parse(escaped_template)
+    param_style_key = param_style if param_style is not None else "pyformat"
+    jinja_sql = _jinja_sql_cache.get(param_style_key)
+    if jinja_sql is None:
+        jinja_sql = JinjaSql(param_style=param_style_key)
+        _jinja_sql_cache[param_style_key] = jinja_sql
+    env = jinja_sql.env
+    # Cache parse and from_string calls
+    parsed_content = _cached_env_parse(env, escaped_template)
     required_variables = meta.find_undeclared_variables(parsed_content)
     jinja_sql_data = {
         variable_name: _get_variable_value(variable_name)
         for variable_name in required_variables
     }
-    return jinja_sql.prepare_query(escaped_template, jinja_sql_data)
+    template_obj = _cached_from_string(env, escaped_template)
+    return jinja_sql._prepare_query(
+        template_obj, jinja_sql_data
+    )  # use _prepare_query directly for cached template
 
 
 def _get_variable_value(variable_name):
@@ -42,4 +55,15 @@ def _escape_jinja_template(template):
     # we have to replace % by %% in the SQL query due to how SQL alchemy interprets %
     # but only if the { is not preceded by { or followed by }, because those are jinja blocks
     # we use lookbehind ?<= and lookahead ?= regex matchers to capture the { and } symbols
-    return re.sub(r"(?<=[^{])%(?=[^}])", "%%", template)
+    return _escaped_percent_re.sub("%%", template)
+
+
+@functools.lru_cache(maxsize=128)
+def _cached_env_parse(env, template_str):
+    # Jinja2 Environment objects are hashable and stable, so fine for cache keys
+    return env.parse(template_str)
+
+
+@functools.lru_cache(maxsize=128)
+def _cached_from_string(env, template_str):
+    return env.from_string(template_str)
