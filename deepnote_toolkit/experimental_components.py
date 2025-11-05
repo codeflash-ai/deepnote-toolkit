@@ -284,7 +284,7 @@ def markdown():
 
 
 def title(str):
-    return h1(str)
+    return DeepnoteElementH1(str)
 
 
 def header():
