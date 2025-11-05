@@ -190,12 +190,22 @@ class DataPreview:
                 "page_index must be non-negative and page_size must be positive"
             )
 
-        total_pages = (len(self._data) + page_size - 1) // page_size
-        normalized_page_index = (
-            min(page_index, total_pages - 1) if total_pages > 0 else 0
-        )
+        data_len = len(self._data)
+        if data_len == 0:
+            return []
+
+        total_pages = (data_len + page_size - 1) // page_size
+        # Clamp the page_index to a valid range to avoid negative values and extra calculation.
+        if page_index >= total_pages:
+            normalized_page_index = total_pages - 1
+        else:
+            normalized_page_index = page_index
+
         start_idx = normalized_page_index * page_size
         end_idx = start_idx + page_size
+        # Slice only up to available data
+        # Avoids allocating list in the empty case above already (so this won't get called unless data_len > 0)
+        # The slice operation is efficient and no copy is made if the full length is requested.
         return self._data[start_idx:end_idx]
 
     def get_columns_stats(
