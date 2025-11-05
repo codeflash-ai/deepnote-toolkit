@@ -19,6 +19,7 @@
 
 from __future__ import unicode_literals
 
+import functools
 from collections import OrderedDict
 from collections.abc import Iterable
 from random import Random
@@ -246,3 +247,7 @@ class JinjaSql(object):
             del _thread_local.bind_params
             del _thread_local.param_style
             del _thread_local.param_index
+
+    @functools.lru_cache(maxsize=128)
+    def _cached_from_string(self, source):
+        return self.env.from_string(source)
