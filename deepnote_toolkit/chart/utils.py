@@ -4,6 +4,8 @@ import pandas as pd
 
 import deepnote_toolkit.ocelots as oc
 
+_jsonable_types = (str, int, float, bool)
+
 
 def sanitize_dataframe_for_chart(pd_df: pd.DataFrame):
     sanitized_dataframe = pd_df.copy()
@@ -57,7 +59,7 @@ def _safe_str(value: Any) -> Optional[str]:
 def serialize_values_list_for_json(values: List[Any]):
     result = []
     for val in values:
-        if _is_jsonable(val):
+        if isinstance(val, _jsonable_types):
             result.append(val)
         else:
             stringified = _safe_str(val)
