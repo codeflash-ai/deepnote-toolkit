@@ -5,6 +5,8 @@ from jinja2 import meta
 
 from .jinjasql import JinjaSql
 
+_jinja_escape_pattern = re.compile(r"(?<=[^{])%(?=[^}])")
+
 
 def render_jinja_sql_template(template, param_style=None):
     """
@@ -42,4 +44,4 @@ def _escape_jinja_template(template):
     # we have to replace % by %% in the SQL query due to how SQL alchemy interprets %
     # but only if the { is not preceded by { or followed by }, because those are jinja blocks
     # we use lookbehind ?<= and lookahead ?= regex matchers to capture the { and } symbols
-    return re.sub(r"(?<=[^{])%(?=[^}])", "%%", template)
+    return _jinja_escape_pattern.sub("%%", template)
