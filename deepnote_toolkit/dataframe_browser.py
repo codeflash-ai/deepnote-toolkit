@@ -90,15 +90,14 @@ class BrowseSpec:
         Raises:
             InvalidAttributesError: If required keys are missing or type is invalid
         """
-        if (
-            not sort_by_spec
-            or sort_by_spec.get("id") is None
-            or sort_by_spec.get("type") is None
-        ):
+        try:
+            column_id = sort_by_spec["id"]
+            column_type = sort_by_spec["type"]
+        except (KeyError, TypeError):
             raise InvalidAttributesError("Invalid attributes given")
 
-        column_id = sort_by_spec["id"]
-        column_type = sort_by_spec["type"]
+        if column_id is None or column_type is None:
+            raise InvalidAttributesError("Invalid attributes given")
 
         # We are going to explicitly not raise an exception for non existent column
         # id to enable users reuse spec between different cell execution results
@@ -109,8 +108,7 @@ class BrowseSpec:
             return column_id, True
         if column_type == "desc":
             return column_id, False
-        else:
-            raise InvalidAttributesError("Invalid sort by type given")
+        raise InvalidAttributesError("Invalid sort by type given")
 
     @staticmethod
     def _parse_color_scale_column_names(
