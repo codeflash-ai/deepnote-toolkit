@@ -3,19 +3,13 @@ import sqlparse
 from sqlparse.tokens import Keyword
 
 from deepnote_toolkit.sql.query_preview import DeepnoteQueryPreview
-from deepnote_toolkit.sql.sql_utils import is_single_select_query
+from deepnote_toolkit.sql.sql_utils import (is_single_select_query,
+                                            is_single_select_query_from_parsed)
 
 
 def add_limit_clause(query: str, limit: int = 100):
     class ExecuteSqlError(Exception):
         pass
-
-    # Chained SQL only supports single SELECT queries
-    # NOTE: the rest of this function depends on this assumption
-    if not is_single_select_query(query):
-        raise ExecuteSqlError(
-            "Invalid query type: Query Preview supports only a single SELECT statement"
-        )
 
     # Remove any trailing semicolons for processing
     query = query.strip()
@@ -23,7 +17,17 @@ def add_limit_clause(query: str, limit: int = 100):
     if has_semicolon:
         query = query[:-1].strip()
 
-    statement = sqlparse.parse(query)[0]
+    # Parse the query only once and reuse the parsed result
+    parsed_queries = sqlparse.parse(query)
+
+    # Chained SQL only supports single SELECT queries
+    # NOTE: the rest of this function depends on this assumption
+    if not is_single_select_query_from_parsed(parsed_queries):
+        raise ExecuteSqlError(
+            "Invalid query type: Query Preview supports only a single SELECT statement"
+        )
+
+    statement = parsed_queries[0]
 
     # Check for top-level LIMIT clause
     has_top_level_limit = False
