@@ -7,6 +7,7 @@ from IPython.core.magic import Magics, cell_magic, magics_class, needs_local_sco
 from IPython.core.magic_arguments import argument, magic_arguments, parse_argstring
 
 from deepnote_toolkit.logging import LoggerManager
+from functools import lru_cache
 
 logger = LoggerManager().get_logger()
 
@@ -73,11 +74,17 @@ def bind_variables(query, user_ns):
 
 
 def get_instantiated_spark_session():
-    from pyspark.sql import SparkSession
+    SparkSession = _get_spark_session_class()
 
     if SparkSession._instantiatedSession is None:
         raise RuntimeError(
             "Active SparkSession is not found. Please establish connection to Spark before executing %%sparksql block."
         )
-
     return SparkSession._instantiatedSession
+
+
+@lru_cache(maxsize=1)
+def _get_spark_session_class():
+    from pyspark.sql import SparkSession
+
+    return SparkSession
