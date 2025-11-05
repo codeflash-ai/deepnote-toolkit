@@ -63,13 +63,19 @@ class SparkSql(Magics):
 
 
 def bind_variables(query, user_ns):
+    # Cache the pattern as a local variable for faster access
+    pattern = BIND_VARIABLE_PATTERN
+
+    # Fetch all matches only once and perform substitution with a single pass
     def fetch_variable(match):
         variable = match.group(1)
-        if variable not in user_ns:
+        try:
+            value = user_ns[variable]
+        except KeyError:
             raise NameError("variable `%s` is not defined", variable)
-        return str(user_ns[variable])
+        return str(value)
 
-    return re.sub(BIND_VARIABLE_PATTERN, fetch_variable, query)
+    return pattern.sub(fetch_variable, query)
 
 
 def get_instantiated_spark_session():
