@@ -25,9 +25,8 @@ class DeepnoteQueryPreview(pd.DataFrame):
 
     def __init__(self, *args, deepnote_query: Optional[str] = None, **kwargs):
         super().__init__(*args, **kwargs)
-        object.__setattr__(
-            self, "_deepnote_query_value", deepnote_query
-        )  # Set the custom property on instantiation
+        # Directly set attribute instead of via object.__setattr__ for faster assignment
+        self._deepnote_query_value = deepnote_query
 
     @property
     def _deepnote_query(self):
@@ -38,7 +37,8 @@ class DeepnoteQueryPreview(pd.DataFrame):
         object.__setattr__(self, "_deepnote_query_value", value)
 
     def _clear_property_on_change(self):
-        object.__setattr__(self, "_deepnote_query_value", None)
+        # Direct attribute set is faster than object.__setattr__ due to internal CPython mechanics
+        self._deepnote_query_value = None
 
     def __setitem__(self, key, value):
         self._clear_property_on_change()
