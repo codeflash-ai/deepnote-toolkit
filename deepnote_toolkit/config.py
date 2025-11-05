@@ -40,7 +40,7 @@ def clear_config_cache() -> None:
 
 
 def get_config(
-    config_path: Optional[Union[str, os.PathLike[str]]] = None
+    config_path: Optional[Union[str, os.PathLike[str]]] = None,
 ) -> DeepnoteConfig:
     """Load the effective configuration (memoized per config_path).
 
@@ -57,9 +57,5 @@ def get_config(
         the same DeepnoteConfig instance on subsequent calls.
     """
     # Convert path-like to Path object if provided
-    cfg_path = (
-        Path(config_path).expanduser().resolve() if config_path is not None else None
-    )
-
-    # Call the cached function
-    return _load_config_cached(cfg_path)
+    # Pass argument directly; normalization inside _load_config_cached to ensure consistent cache key & correctness
+    return _load_config_cached(config_path)
