@@ -29,6 +29,8 @@ from jinja2.ext import Extension
 from jinja2.lexer import Token
 from markupsafe import Markup
 
+_list_type = (list, tuple)
+
 _thread_local = local()
 
 # This is mocked in unit tests for deterministic behaviour
@@ -183,7 +185,7 @@ def build_escape_identifier_filter(identifier_quote_character):
 
 
 def requires_in_clause(obj):
-    return isinstance(obj, (list, tuple))
+    return isinstance(obj, _list_type)
 
 
 def is_dictionary(obj):
