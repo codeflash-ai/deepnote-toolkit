@@ -11,7 +11,7 @@ from deepnote_toolkit.ocelots.types import ColumnsStatsRecord, ColumnStats
 
 def _count_unique(column):
     try:
-        return column.dropna().nunique()
+        return column.nunique(dropna=True)
     except TypeError:
         # This happens when the column contains e.g. dictionaries, lists or sets
         # In that case, we fall back to each value being unique
