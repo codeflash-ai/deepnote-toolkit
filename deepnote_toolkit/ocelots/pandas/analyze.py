@@ -138,42 +138,67 @@ def analyze_columns(
     max_cells_to_analyze = (
         100000  # calculated so that the analysis takes no more than 100ms
     )
-    if len(df) == 0:
-        max_columns_to_analyze = len(df.columns)
+    num_rows = len(df)
+    num_columns = len(df.columns)
+    if num_rows == 0:
+        max_columns_to_analyze = num_columns
     else:
         max_columns_to_analyze = min(
-            math.floor(max_cells_to_analyze / len(df)),
-            len(df.columns),
+            math.floor(max_cells_to_analyze / num_rows),
+            num_columns,
         )
 
     # Analyze columns
+
+    # Pre-bake dtypes and column names as lists for faster zipped iteration
+    column_names = list(df.columns)
+    column_dtypes = df.dtypes.tolist()
+
+    # Analyze columns: create empty stats records
     columns = [
         ColumnsStatsRecord(
             name=str(name),
             dtype=str(dtype),
         )
-        for name, dtype in zip(df.columns, df.dtypes)
+        for name, dtype in zip(column_names, column_dtypes)
     ]
 
     # Add stats to columns, but only within computational limit
     for i in range(max_columns_to_analyze):
-        column = df.iloc[
-            :, i
-        ]  # We need to use iloc because it works if column names have duplicates
-        if columns[i].name == DEEPNOTE_INDEX_COLUMN:
+        col_name = columns[i].name
+        if col_name == DEEPNOTE_INDEX_COLUMN:
             continue  # Do not analyze DEEPNOTE_INDEX_COLUMN column
 
-        columns[i].stats = ColumnStats(
-            unique_count=_count_unique(column), nan_count=column.isnull().sum().item()
+        # Access the column efficiently, allow for duplicate names
+        column = df.iloc[:, i]
+        dtype = column.dtype
+
+        dropna_col = column.dropna()
+        nan_count = column.isnull().sum().item()
+
+        unique_count = _count_unique(column)
+
+        stats = ColumnStats(
+            unique_count=unique_count,
+            nan_count=nan_count,
         )
 
-        if _is_type_numeric(column.dtype):
-            min_value, max_value = _calculate_min_max(column)
-            columns[i].stats.min = min_value
-            columns[i].stats.max = max_value
-            columns[i].stats.histogram = _get_histogram(column)
+        if _is_type_numeric(dtype):
+            # Only call dropna once for min/max
+            if len(dropna_col) > 0:
+                min_value = str(dropna_col.min())
+                max_value = str(dropna_col.max())
+            else:
+                min_value, max_value = None, None
+            stats.min = min_value
+            stats.max = max_value
+            stats.histogram = _get_histogram(column)
         else:
-            columns[i].stats.categories = _get_categories(np.array(column))
+            # Avoid the np.array conversion unless needed
+            stats.categories = _get_categories(column.values)
+
+        columns[i].stats = stats
+
 
     if not color_scale_column_names:
         return columns
@@ -184,29 +209,42 @@ def analyze_columns(
     remaining_cells_to_analyze_for_color_scales = 10000000
 
     # Process remaining columns for color scale rules
-    for i in range(max_columns_to_analyze, len(df.columns)):
+    for i in range(max_columns_to_analyze, num_columns):
         # Ignore columns that are not numeric
         column = df.iloc[:, i]
-        if not _is_type_numeric(column.dtype):
+        dtype = column.dtype
+        if not _is_type_numeric(dtype):
             continue
 
         column_name = columns[i].name
 
         if column_name in color_scale_column_names:
             # Check if we still have budget to analyze all of the DataFrame rows for this column
-            if remaining_cells_to_analyze_for_color_scales <= len(df):
+            col_len = len(column)
+            if remaining_cells_to_analyze_for_color_scales <= col_len:
                 break  # Exceeded budget, stop processing
 
-            columns[i].stats = ColumnStats(
-                unique_count=_count_unique(column),
-                nan_count=column.isnull().sum().item(),
+            dropna_col = column.dropna()
+            nan_count = column.isnull().sum().item()
+            unique_count = _count_unique(column)
+
+            stats = ColumnStats(
+                unique_count=unique_count,
+                nan_count=nan_count,
             )
 
-            min_value, max_value = _calculate_min_max(column)
-            columns[i].stats.min = min_value
-            columns[i].stats.max = max_value
-            columns[i].stats.histogram = _get_histogram(column)
+            if len(dropna_col) > 0:
+                min_value = str(dropna_col.min())
+                max_value = str(dropna_col.max())
+            else:
+                min_value, max_value = None, None
+            stats.min = min_value
+            stats.max = max_value
+            stats.histogram = _get_histogram(column)
 
-            remaining_cells_to_analyze_for_color_scales -= len(column)
+            columns[i].stats = stats
+
+            remaining_cells_to_analyze_for_color_scales -= col_len
+
 
     return columns
