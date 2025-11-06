@@ -338,7 +338,8 @@ class PandasImplementation:
     def prepare_for_serialization(self) -> Self:
         """Prepare the dataframe for serialization."""
         df_analyzed = self._df.copy()
-        df_analyzed.columns = map(flatten_column_name, df_analyzed.columns)
+        # Eagerly expand column names with list/map for compatibility and better performance
+        df_analyzed.columns = list(map(flatten_column_name, df_analyzed.columns))
         deduplicate_columns(df_analyzed)
         df_analyzed = fix_nan_category(df_analyzed)
 
