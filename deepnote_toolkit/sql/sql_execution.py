@@ -32,6 +32,16 @@ from deepnote_toolkit.sql.sql_caching import get_sql_cache, upload_sql_cache
 from deepnote_toolkit.sql.sql_query_chaining import add_limit_clause, unchain_sql_query
 from deepnote_toolkit.sql.sql_utils import is_single_select_query
 from deepnote_toolkit.sql.url_utils import replace_user_pass_in_pg_url
+import pandas as pd
+from sqlalchemy import __version__ as sqlalchemy_version
+
+_pandas_version = parse_version(pd.__version__)
+
+_sqlalchemy_version = parse_version(sqlalchemy_version)
+
+_needs_raw_connection = _pandas_version >= parse_version(
+    "2.2"
+) and _sqlalchemy_version < parse_version("2.0")
 
 
 def compile_sql_query(
@@ -400,11 +410,6 @@ def _execute_sql_on_engine(engine, query, bind_params):
     we use the underlying connection.
     """
 
-    import pandas as pd
-    from sqlalchemy import __version__ as sqlalchemy_version
-
-    from deepnote_toolkit.config import get_config
-
     try:
         cfg_val = get_config().runtime.coerce_float
         # Treat None as unspecified → default True
@@ -412,17 +417,11 @@ def _execute_sql_on_engine(engine, query, bind_params):
     except (ImportError, AttributeError, TypeError, ValueError):
         coerce_float = True
 
-    # Check pandas version to determine if we need raw connection
-    p_ver, sa_ver = parse_version(pd.__version__), parse_version(sqlalchemy_version)
-    needs_raw_connection = p_ver >= parse_version("2.2") and sa_ver < parse_version(
-        "2.0"
-    )
-
     with engine.begin() as connection:
         try:
             # For pandas 2.2+, use raw connection to avoid 'cursor' AttributeError
             connection_for_pandas = (
-                connection.connection if needs_raw_connection else connection
+                connection.connection if _needs_raw_connection else connection
             )
 
             return pd.read_sql_query(
