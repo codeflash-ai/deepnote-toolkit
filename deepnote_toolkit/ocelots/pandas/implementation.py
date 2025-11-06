@@ -327,9 +327,8 @@ class PandasImplementation:
         result = {}
         for column_name in column_names:
             try:
-                result[column_name] = (
-                    self._df[column_name].dropna().unique().tolist()[: min(limit, 1000)]
-                )
+                vals = self._df[column_name].dropna().unique()
+                result[column_name] = vals[: min(limit, 1000)].tolist()
             except TypeError:
                 # This happens when the column contains e.g. dictionaries, lists or sets
                 result[column_name] = []
