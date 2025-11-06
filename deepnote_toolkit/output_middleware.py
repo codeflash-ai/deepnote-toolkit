@@ -17,11 +17,20 @@ def _process_execution_result(result: Any):
 def _create_middleware_displayhook_class(base_class):
     """Create a new displayhook class that wraps __call__ method to call middleware"""
 
+    cache = getattr(_create_middleware_displayhook_class, "_cache", None)
+    if cache is None:
+        cache = {}
+        _create_middleware_displayhook_class._cache = cache
+
+    if base_class in cache:
+        return cache[base_class]
+
     class DynamicOutputMiddlewareDisplayHook(base_class):
         def __call__(self, result=None):
             middleware_result = _process_execution_result(result)
             return super().__call__(middleware_result)
 
+    cache[base_class] = DynamicOutputMiddlewareDisplayHook
     return DynamicOutputMiddlewareDisplayHook
 
 
