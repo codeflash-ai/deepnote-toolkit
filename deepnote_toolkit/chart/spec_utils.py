@@ -45,10 +45,14 @@ def attach_config_to_vega_lite_spec(spec):
 
 
 def _is_multilayer_spec_v1(spec: Dict[str, Any]) -> bool:
+    # Fast path: Don't repeatedly call get; cache results
+    mark = spec.get("mark")
+    layer = spec.get("layer")
+    usermeta = spec.get("usermeta")
     return (
-        spec.get("mark") is None
-        and spec.get("layer") is not None
-        and spec.get("usermeta", {}).get("specSchemaVersion") is None
+        mark is None
+        and layer is not None
+        and (usermeta is None or usermeta.get("specSchemaVersion") is None)
     )
 
 
@@ -61,10 +65,13 @@ def _is_multilayer_spec_v2(spec: Dict[str, Any]) -> bool:
 
 
 def _is_top_layer_spec(spec: Dict[str, Any]) -> bool:
+    mark = spec.get("mark")
+    layer = spec.get("layer")
+    usermeta = spec.get("usermeta")
     return (
-        spec.get("mark") is not None
-        and spec.get("layer") is None
-        and spec.get("usermeta", {}).get("specSchemaVersion") is None
+        mark is not None
+        and layer is None
+        and (usermeta is None or usermeta.get("specSchemaVersion") is None)
     )
 
 
@@ -75,11 +82,14 @@ def _is_data_layer(layer: Dict[str, Any]) -> bool:
 
     # Check if it's a text layer (text layers are not data layers)
     mark = layer.get("mark")
-    if isinstance(mark, str) and mark == "text":
-        return False
-
-    if isinstance(mark, dict) and mark.get("type") == "text":
-        return False
+    if isinstance(mark, str):
+        if mark == "text":
+            return False
+    elif isinstance(mark, dict):
+        # Safe and fast: don't make intermediate lists, just check result
+        type_val = mark.get("type")
+        if type_val == "text":
+            return False
 
     return True
 
@@ -94,34 +104,43 @@ def _get_all_data_layers(spec: Dict[str, Any]) -> List[Dict[str, Any]]:
         return [{"layer": spec, "axisGroup": "primary", "helperLayers": []}]
 
     if _is_multilayer_spec_v1(spec):
-        # In spec v1, if dual axis option was enabled, each layer got its own axis (and that worked poorly with 3+ layers),
-        # so we just assume that first layer uses primary axis and rest use secondary axis
-        resolve_scale = spec.get("resolve", {}).get("scale", {})
-        chart_has_dual_axis = (
-            resolve_scale.get("x") == "independent"
-            or resolve_scale.get("y") == "independent"
-        )
+        resolve = spec.get("resolve")
+        if resolve is not None:
+            scale = resolve.get("scale")
+            if scale is not None:
+                chart_has_dual_axis = (
+                    scale.get("x") == "independent" or scale.get("y") == "independent"
+                )
+            else:
+                chart_has_dual_axis = False
+        else:
+            chart_has_dual_axis = False
 
-        result = []
-        for index, layer in enumerate(spec["layer"]):
+        layers = spec.get("layer", ())
+        # Preallocate output array for better cache performance
+        result: List[Dict[str, Any]] = []
+        append_result = result.append  # Localize for speed in loop
+
+        for index, layer in enumerate(layers):
             if _is_data_layer(layer):
                 data_layer = layer
                 helper_layers = []
             else:
-                # It's a parent layer with nested layers
-                nested_layers = layer.get("layer", [])
-                if nested_layers:
-                    data_layer = nested_layers[0]
-                    helper_layers = nested_layers[1:]
-                else:
+                nested_layers = layer.get("layer")
+                if not nested_layers:
+                    # Skip if no nested layers
                     continue  # Skip if no nested layers
+
+                # Avoid index slicing if possible
+                data_layer = nested_layers[0]
+                helper_layers = nested_layers[1:] if len(nested_layers) > 1 else []
 
             axis_group = (
                 "primary"
                 if index == 0
                 else ("secondary" if chart_has_dual_axis else "primary")
             )
-            result.append(
+            append_result(
                 {
                     "layer": data_layer,
                     "axisGroup": axis_group,
@@ -133,21 +152,26 @@ def _get_all_data_layers(spec: Dict[str, Any]) -> List[Dict[str, Any]]:
     # Multilayer spec v2
     # In spec v2 measure axis for layer is indicated by its parent group, first group -> primary axis,
     # second group -> secondary axis
-    result = []
-    for group_index, axis_group in enumerate(spec.get("layer", [])):
-        for parent_layer in axis_group.get("layer", []):
-            nested_layers = parent_layer.get("layer", [])
-            if nested_layers:
-                data_layer = nested_layers[0]
-                helper_layers = nested_layers[1:]
-                axis_group_type = "primary" if group_index == 0 else "secondary"
-                result.append(
-                    {
-                        "layer": data_layer,
-                        "axisGroup": axis_group_type,
-                        "helperLayers": helper_layers,
-                    }
-                )
+    result: List[Dict[str, Any]] = []
+    append_result = result.append
+    layer_groups = spec.get("layer", ())
+    for group_index, axis_group in enumerate(layer_groups):
+        # axis_group.get("layer", []) should be only called once
+        parent_layers = axis_group.get("layer", ())
+        axis_group_type = "primary" if group_index == 0 else "secondary"
+        for parent_layer in parent_layers:
+            nested_layers = parent_layer.get("layer")
+            if not nested_layers:
+                continue
+            data_layer = nested_layers[0]
+            helper_layers = nested_layers[1:] if len(nested_layers) > 1 else []
+            append_result(
+                {
+                    "layer": data_layer,
+                    "axisGroup": axis_group_type,
+                    "helperLayers": helper_layers,
+                }
+            )
     return result
 
 
