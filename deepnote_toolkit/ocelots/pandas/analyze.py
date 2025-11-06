@@ -19,12 +19,21 @@ def _count_unique(column):
 
 
 def _get_categories(np_array):
-    pandas_series = pd.Series(np_array.tolist())
+    # Convert to numpy array if needed and detect missing values efficiently
+    if not isinstance(np_array, np.ndarray):
+        np_array = np.asarray(np_array)
 
-    # special treatment for empty values
-    num_nans = pandas_series.isna().sum().item()
+    # Use pandas isna for consistent missing value detection across all dtypes
+    mask = pd.isna(np_array)
+    num_nans = int(mask.sum())
 
-    counter = Counter(pandas_series.dropna().astype(str))
+    # Filter out missing values and count using generator to avoid intermediate arrays
+    if num_nans > 0:
+        valid_vals = np_array[~mask]
+    else:
+        valid_vals = np_array
+
+    counter = Counter(str(v) for v in valid_vals)
 
     max_items = 3
     if num_nans > 0:
