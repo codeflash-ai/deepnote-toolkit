@@ -67,28 +67,37 @@ class Filter:
             ValueError: If required keys are missing or operator is invalid
         """
         # Handle legacy column contains filter format
-        if "type" in input_dict and input_dict["type"] == "contains":
-            if "id" not in input_dict or "value" not in input_dict:
+        if input_dict.get("type") == "contains":
+            try:
+                column = input_dict["id"]
+                value = input_dict["value"]
+            except KeyError:
                 raise ValueError(
                     "Missing required keys for contains filter: id and value"
                 )
             return cls(
-                column=input_dict["id"],
+                column=column,
                 operator=FilterOperator.TEXT_CONTAINS,
-                comparative_values=[input_dict["value"]],
+                comparative_values=[value],
             )
 
-        required_keys = ["column", "operator", "comparativeValues"]
-        if not all(key in input_dict for key in required_keys):
-            raise ValueError(f"Missing required keys: {required_keys}")
+        try:
+            column = input_dict["column"]
+            operator_raw = input_dict["operator"]
+            comparative_values = input_dict["comparativeValues"]
+        except KeyError:
+            # Avoid building a list (original allocates unnecessary list)
+            raise ValueError(
+                "Missing required keys: ['column', 'operator', 'comparativeValues']"
+            )
 
         try:
-            operator = FilterOperator(input_dict["operator"])
+            operator = FilterOperator(operator_raw)
         except ValueError:
-            raise ValueError(f"Invalid operator: {input_dict['operator']}")
+            raise ValueError(f"Invalid operator: {operator_raw}")
 
         return cls(
-            column=input_dict["column"],
+            column=column,
             operator=operator,
-            comparative_values=input_dict["comparativeValues"],
+            comparative_values=comparative_values,
         )
