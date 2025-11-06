@@ -73,19 +73,20 @@ def _get_histogram(pd_series):
             pd_series
         ) or pd.api.types.is_timedelta64_dtype(pd_series):
             # convert datetime or timedelta to an integer so that a histogram can be created
-            np_array = np.array(pd_series.dropna().astype(int))
+            np_array = pd_series.dropna().values.astype(int)
         else:
             # let's drop infinite values because they break histograms
-            np_array = np.array(pd_series.replace([np.inf, -np.inf], np.nan).dropna())
+            np_array = pd_series.replace([np.inf, -np.inf], np.nan).dropna().values
 
         # Check if array is empty after dropping NaN/NaT values
         if len(np_array) == 0:
             return None
 
         y, bins = np.histogram(np_array, bins=10)
+        counts = y.tolist()
         return [
-            {"bin_start": bins[i], "bin_end": bins[i + 1], "count": count.item()}
-            for i, count in enumerate(y)
+            {"bin_start": bins[i], "bin_end": bins[i + 1], "count": counts[i]}
+            for i in range(len(counts))
         ]
     except (ValueError, IndexError) as e:
         # NumPy 2.2+ raises "Too many bins for data range" when:
