@@ -46,10 +46,14 @@ class PysparkImplementation:
         big offset, as it requires pulling all preceding rows into driver machine.
         """
         total_rows = self.size()
+        if total_rows == 0:
+            normalized_page_index = 0
+            start = 0
+            new_df = self._df.limit(0)
+            return self.__class__(new_df)
+
         total_pages = (total_rows + page_size - 1) // page_size
-        normalized_page_index = (
-            min(page_index, total_pages - 1) if total_pages > 0 else 0
-        )
+        normalized_page_index = min(page_index, total_pages - 1)
 
         start = normalized_page_index * page_size
 
@@ -57,7 +61,12 @@ class PysparkImplementation:
             # Spark 3.4+
             paged = self._df.offset(start).limit(page_size)
         else:
-            rows = self._df.limit(start + page_size).tail(page_size)
+            # Use 'collect' instead of 'tail' for small page_size
+            if page_size <= 1000:
+                rows = self._df.limit(start + page_size).collect()[start:]
+            else:
+                # For very large page sizes, use tail as original
+                rows = self._df.limit(start + page_size).tail(page_size)
             paged = self._df.sparkSession.createDataFrame(rows, self._df.schema)
 
         return self.__class__(paged)
