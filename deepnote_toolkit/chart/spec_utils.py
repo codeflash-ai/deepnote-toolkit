@@ -75,11 +75,12 @@ def _is_data_layer(layer: Dict[str, Any]) -> bool:
 
     # Check if it's a text layer (text layers are not data layers)
     mark = layer.get("mark")
-    if isinstance(mark, str) and mark == "text":
-        return False
-
-    if isinstance(mark, dict) and mark.get("type") == "text":
-        return False
+    if type(mark) is str:
+        if mark == "text":
+            return False
+    elif type(mark) is dict:
+        if mark.get("type") == "text":
+            return False
 
     return True
 
@@ -222,27 +223,32 @@ def _create_chart_params(
 def _create_chart_layer_axis_opacity(
     param_name_suffix: str, mark_type: str, params: List[Dict[str, Any]]
 ) -> Dict[str, Any]:
-    does_mark_support_variable_opacity = mark_type in ["point", "circle", "bar"]
-    does_interval_selection_param_exist = any(
-        param.get("name") == "interval_selection" for param in params
-    )
+    # Use set lookup for O(1) mark support check
+    does_mark_support_variable_opacity = mark_type in {"point", "circle", "bar"}
+
+    # Use generator with early exit for interval param existence
+    does_interval_selection_param_exist = False
+    for param in params:
+        if param.get("name") == "interval_selection":
+            does_interval_selection_param_exist = True
+            break
+
     should_add_interval_selection_params = (
         does_mark_support_variable_opacity and does_interval_selection_param_exist
     )
 
-    condition_test = {
-        "and": [
-            {"param": _create_vega_legend_filter_name("size", param_name_suffix)},
-            {"param": _create_vega_legend_filter_name("color", param_name_suffix)},
-        ]
-    }
+    # Prebuild base filter list, append interval param only if needed
+    condition_and = [
+        {"param": _create_vega_legend_filter_name("size", param_name_suffix)},
+        {"param": _create_vega_legend_filter_name("color", param_name_suffix)},
+    ]
 
     if should_add_interval_selection_params:
-        condition_test["and"].append({"param": "interval_selection"})
+        condition_and.append({"param": "interval_selection"})
 
     return {
         "condition": {
-            "test": condition_test,
+            "test": {"and": condition_and},
             "value": 1,
         },
         "value": 0.2,
