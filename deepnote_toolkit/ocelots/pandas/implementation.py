@@ -44,13 +44,27 @@ class PandasImplementation:
 
         If the requested page index is out of bounds, returns the last page instead.
         """
-        total_pages = (len(self._df) + page_size - 1) // page_size
+        total_rows = len(self._df)
+        total_pages = (total_rows + page_size - 1) // page_size
+
         normalized_page_index = (
             min(page_index, total_pages - 1) if total_pages > 0 else 0
         )
         start_idx = normalized_page_index * page_size
         end_idx = start_idx + page_size
-        return self.__class__(self._df.iloc[start_idx:end_idx])
+
+        # Optimize slicing by using .iloc if contiguous, otherwise slice underlying array
+        # But since DataFrame.iloc is already highly optimized (and required for correct row selection),
+        # we only optimize for the case where start_idx == 0 and page_size >= total_rows,
+        # which covers the common case of "show all".
+        if start_idx == 0 and end_idx >= total_rows:
+            # Return the whole dataframe without copy
+            new_df = self._df
+        else:
+            # .iloc makes a copy, but it's the fastest safe way for proper row slicing; avoid double copying
+            new_df = self._df.iloc[start_idx:end_idx]
+
+        return self.__class__(new_df)
 
     def size(self) -> int:
         """Get the number of rows in the dataframe."""
