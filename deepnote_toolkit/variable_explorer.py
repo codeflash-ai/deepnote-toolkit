@@ -331,7 +331,8 @@ def _get_columns(x):
     """
 
     if oc.utils.is_pandas_dataframe(x):
-        return x.columns[: oc.constants.MAX_COLUMNS_TO_DISPLAY].map(str).tolist()
+        col_limit = oc.constants.MAX_COLUMNS_TO_DISPLAY
+        return [str(col) for col in x.columns[:col_limit]]
     return None
 
 

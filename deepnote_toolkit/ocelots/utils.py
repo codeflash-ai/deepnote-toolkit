@@ -6,9 +6,11 @@ from typing_extensions import TypeGuard
 from deepnote_toolkit.ocelots.types import PandasDF, PandasOnSparkDF, PysparkDF
 from deepnote_toolkit.sql.query_preview import DeepnoteQueryPreview
 
+_PANDAS_DF_TYPES = (pd.DataFrame, DeepnoteQueryPreview)
+
 
 def is_pandas_dataframe(df) -> TypeGuard[PandasDF]:
-    return isinstance(df, (pd.DataFrame, DeepnoteQueryPreview))
+    return isinstance(df, _PANDAS_DF_TYPES)
 
 
 def is_pyspark_dataframe(df) -> TypeGuard[PysparkDF]:
