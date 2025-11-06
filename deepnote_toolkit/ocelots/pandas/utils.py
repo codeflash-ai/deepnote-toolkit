@@ -14,8 +14,8 @@ def fill_nat(df, value):
 
 
 def flatten_column_name(item):
-    if isinstance(item, list) or isinstance(item, tuple):
-        return " ".join(map(lambda x: str(x or ""), item))
+    if isinstance(item, (list, tuple)):
+        return " ".join(str(x or "") for x in item)
     else:
         return item
 
