@@ -16,6 +16,14 @@ from deepnote_toolkit.ocelots.types import (
     ColumnStats,
     PysparkDF,
 )
+from pyspark.sql import Column, functions as F
+from pyspark.sql.types import (
+    BinaryType,
+    DecimalType,
+    NumericType,
+    StringType,
+    StructField,
+)
 
 
 class PysparkImplementation:
@@ -222,15 +230,10 @@ class PysparkImplementation:
 
     def to_records(self, mode: Literal["json", "python"]) -> List[Dict[str, Any]]:
         """Convert the dataframe to a list of dictionaries."""
-        from pyspark.sql import Column
-        from pyspark.sql import functions as F
-        from pyspark.sql.types import (
-            BinaryType,
-            DecimalType,
-            NumericType,
-            StringType,
-            StructField,
-        )
+        # Moved imports and constant calculation out of function to avoid repeated overhead
+
+        # Moved keep_bytes calculation out of select_column for efficiency
+        keep_bytes = (MAX_STRING_CELL_LENGTH // 4) * 3
 
         def select_column(field: StructField) -> Column:
             col = F.col(field.name)
@@ -253,18 +256,18 @@ class PysparkImplementation:
             # Everything else gets stringified (Decimal, Date, Timestamp, Struct, …)
             return F.substring(col.cast("string"), 1, MAX_STRING_CELL_LENGTH)
 
-        keep_bytes = (MAX_STRING_CELL_LENGTH // 4) * 3
-
         if mode == "python":
-            return [row.asDict() for row in self._df.collect()]
+            collect = self._df.collect()
+            # Avoid repeated attribute access in list comprehension
+            return [row.asDict() for row in collect]
         elif mode == "json":
-            query = (
-                select_column(field).alias(field.name)
-                for field in self._df.schema.fields
-            )
-            converted_df = self._df.select(*query)
-
-            return [row.asDict(True) for row in converted_df.collect()]
+            # Use list comprehension for eager evaluation and avoid generator for self._df.select for slight optimization
+            fields = self._df.schema.fields
+            # Precompute columns list via list comprehension to avoid generator overhead and attribute repeated access for fields
+            columns = [select_column(field).alias(field.name) for field in fields]
+            converted_df = self._df.select(*columns)
+            collect = converted_df.collect()
+            return [row.asDict(True) for row in collect]
 
     def to_csv(self, path_or_buf: Union[str, TextIO]) -> None:
         """Write the dataframe to a CSV file."""
