@@ -393,12 +393,12 @@ def _get_number_of_elements(x):
 
 
 def _get_number_of_columns(x):
-    try:
-        if oc.utils.is_pandas_dataframe(x):
+    if oc.utils.is_pandas_dataframe(x):
+        try:
             return len(x.columns)
-        else:
+        except:  # noqa: E722
             return None
-    except:  # noqa: E722
+    else:
         return None
 
 
