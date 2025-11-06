@@ -357,5 +357,7 @@ class PysparkImplementation:
         # NOTE: We do not add the DEEPNOTE_INDEX_COLUMN column here because it's not possible to get a consecutive
         # sequence of numbers used as a row ID in PySpark in a performant manner. We use DataPreview to handle PySpark
         # dataframes in the app, and it adds its own index column when materializing the records.
-        columns = self._df.columns[:MAX_COLUMNS_TO_DISPLAY]
-        return self.__class__(self._df.select(*columns))
+        columns = self._df.columns
+        if len(columns) > MAX_COLUMNS_TO_DISPLAY:
+            columns = columns[:MAX_COLUMNS_TO_DISPLAY]
+        return self.__class__(self._df.select(columns))
