@@ -1,7 +1,10 @@
-from typing import Dict
+from typing import Optional, Dict
 
 from . import env as dnenv
 from .config import get_config
+
+# Cache the config object to avoid repeated I/O/deserialization per process.
+_CONFIG_CACHE: Optional[object] = None
 
 
 def get_project_auth_headers() -> Dict[str, str]:
@@ -13,11 +16,13 @@ def get_project_auth_headers() -> Dict[str, str]:
         if in detached mode and environment variables are set, otherwise empty dict.
     """
     headers: Dict[str, str] = {}
-    cfg = get_config()
-    if not cfg.runtime.running_in_detached_mode:
+    cfg = _get_cached_config()
+    runtime = cfg.runtime
+    if not runtime.running_in_detached_mode:
         return headers
-    project_uuid = cfg.runtime.project_id or dnenv.get_env("DEEPNOTE_PROJECT_ID")
-    project_secret = cfg.runtime.project_secret.get_secret_value()
+    project_uuid = runtime.project_id or dnenv.get_env("DEEPNOTE_PROJECT_ID")
+    # Only call project_secret getter if detached mode (which we just checked)
+    project_secret = runtime.project_secret.get_secret_value()
 
     if project_uuid:
         headers["RuntimeUuid"] = project_uuid
@@ -35,16 +40,18 @@ def get_absolute_userpod_api_url(relative_url: str) -> str:
     Returns:
         Absolute URL for the userpod API endpoint.
     """
-    cfg = get_config()
-    is_direct_mode = bool(cfg.runtime.running_in_detached_mode or cfg.runtime.dev_mode)
+    cfg = _get_cached_config()
+    runtime = cfg.runtime
+    # Direct mode short-circuit (both detached and dev)
+    is_direct_mode = bool(runtime.running_in_detached_mode or runtime.dev_mode)
     if not is_direct_mode:
         return f"http://localhost:19456/userpod-api/{relative_url}"
 
     # Direct mode requires webapp URL and project ID
-    webapp_url = cfg.runtime.webapp_url
+    webapp_url = runtime.webapp_url
     if webapp_url:
         webapp_url = webapp_url.rstrip("/")
-    project_id = cfg.runtime.project_id or dnenv.get_env("DEEPNOTE_PROJECT_ID")
+    project_id = runtime.project_id or dnenv.get_env("DEEPNOTE_PROJECT_ID")
 
     if not webapp_url or not project_id:
         raise ValueError(
@@ -77,3 +84,12 @@ def get_absolute_notebook_functions_api_url(relative_url: str) -> str:
     webapp_url = webapp_url.rstrip("/")
 
     return f"{webapp_url}/api/notebook-functions/{relative_url}"
+
+
+def _get_cached_config():
+    global _CONFIG_CACHE
+    if _CONFIG_CACHE is not None:
+        return _CONFIG_CACHE
+    cfg = get_config()
+    _CONFIG_CACHE = cfg
+    return cfg
