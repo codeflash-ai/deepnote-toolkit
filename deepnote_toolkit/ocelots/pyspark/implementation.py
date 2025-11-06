@@ -78,8 +78,12 @@ class PysparkImplementation:
 
     def sort(self, columns: List[Tuple[str, bool]]) -> Self:
         """Sort the dataframe by multiple columns."""
-        by = [col for col, _ in columns]
-        ascending = [asc for _, asc in columns]
+        # Avoid two passes over columns, do both at once for small performance gain
+        by = []
+        ascending = []
+        for col, asc in columns:
+            by.append(col)
+            ascending.append(asc)
         return self.__class__(self._df.sort(*by, ascending=ascending))
 
     def filter(self, *filters: Filter) -> Self:
