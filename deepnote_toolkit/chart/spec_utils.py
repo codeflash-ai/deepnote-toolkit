@@ -45,26 +45,30 @@ def attach_config_to_vega_lite_spec(spec):
 
 
 def _is_multilayer_spec_v1(spec: Dict[str, Any]) -> bool:
+    usermeta = spec.get("usermeta")
     return (
         spec.get("mark") is None
         and spec.get("layer") is not None
-        and spec.get("usermeta", {}).get("specSchemaVersion") is None
+        and (usermeta is None or usermeta.get("specSchemaVersion") is None)
     )
 
 
 def _is_multilayer_spec_v2(spec: Dict[str, Any]) -> bool:
+    usermeta = spec.get("usermeta")
     return (
         spec.get("mark") is None
         and spec.get("layer") is not None
-        and spec.get("usermeta", {}).get("specSchemaVersion") == 2
+        and usermeta is not None
+        and usermeta.get("specSchemaVersion") == 2
     )
 
 
 def _is_top_layer_spec(spec: Dict[str, Any]) -> bool:
+    usermeta = spec.get("usermeta")
     return (
         spec.get("mark") is not None
         and spec.get("layer") is None
-        and spec.get("usermeta", {}).get("specSchemaVersion") is None
+        and (usermeta is None or usermeta.get("specSchemaVersion") is None)
     )
 
 
@@ -75,11 +79,12 @@ def _is_data_layer(layer: Dict[str, Any]) -> bool:
 
     # Check if it's a text layer (text layers are not data layers)
     mark = layer.get("mark")
-    if isinstance(mark, str) and mark == "text":
-        return False
-
-    if isinstance(mark, dict) and mark.get("type") == "text":
-        return False
+    if type(mark) is str:
+        if mark == "text":
+            return False
+    elif type(mark) is dict:
+        if mark.get("type") == "text":
+            return False
 
     return True
 
@@ -203,10 +208,8 @@ def _create_chart_params(
     # Note that we are setting interval selection only for first layer. Vega is behaving strangely when
     # more than one interval selection is set.
     is_first_layer = param_name_suffix == "0" or param_name_suffix == "0_0"
-
-    data_selections = []
     if layer and is_first_layer and _is_data_layer(layer):
-        data_selections = [
+        return legend_selections + [
             {
                 "name": "interval_selection",
                 "select": {
@@ -215,17 +218,20 @@ def _create_chart_params(
                 },
             },
         ]
-
-    return legend_selections + data_selections
+    else:
+        return legend_selections
 
 
 def _create_chart_layer_axis_opacity(
     param_name_suffix: str, mark_type: str, params: List[Dict[str, Any]]
 ) -> Dict[str, Any]:
     does_mark_support_variable_opacity = mark_type in ["point", "circle", "bar"]
-    does_interval_selection_param_exist = any(
-        param.get("name") == "interval_selection" for param in params
-    )
+    does_interval_selection_param_exist = False
+    for param in params:
+        if param.get("name") == "interval_selection":
+            does_interval_selection_param_exist = True
+            break
+
     should_add_interval_selection_params = (
         does_mark_support_variable_opacity and does_interval_selection_param_exist
     )
@@ -272,10 +278,12 @@ def attach_selection_parameters_to_vega_lite_spec(spec):
             mark_type = _get_mark_type(layer)
 
             # Ensure encoding exists
-            if "encoding" not in layer:
-                layer["encoding"] = {}
+            encoding = layer.get("encoding")
+            if encoding is None:
+                encoding = {}
+                layer["encoding"] = encoding
 
-            layer["encoding"]["opacity"] = _create_chart_layer_axis_opacity(
+            encoding["opacity"] = _create_chart_layer_axis_opacity(
                 param_name_suffix, mark_type, params
             )
 
@@ -285,13 +293,12 @@ def attach_selection_parameters_to_vega_lite_spec(spec):
 
         mark_type = _get_mark_type(spec)
 
-        # Ensure encoding exists
-        if "encoding" not in spec:
-            spec["encoding"] = {}
+        encoding = spec.get("encoding")
+        if encoding is None:
+            encoding = {}
+            spec["encoding"] = encoding
 
-        spec["encoding"]["opacity"] = _create_chart_layer_axis_opacity(
-            "0", mark_type, params
-        )
+        encoding["opacity"] = _create_chart_layer_axis_opacity("0", mark_type, params)
 
     else:
         # Handle case where spec doesn't match expected patterns
