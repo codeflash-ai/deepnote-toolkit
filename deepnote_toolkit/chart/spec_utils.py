@@ -75,11 +75,12 @@ def _is_data_layer(layer: Dict[str, Any]) -> bool:
 
     # Check if it's a text layer (text layers are not data layers)
     mark = layer.get("mark")
-    if isinstance(mark, str) and mark == "text":
-        return False
-
-    if isinstance(mark, dict) and mark.get("type") == "text":
-        return False
+    if type(mark) is str:
+        if mark == "text":
+            return False
+    elif type(mark) is dict:
+        if mark.get("type") == "text":
+            return False
 
     return True
 
@@ -153,23 +154,20 @@ def _get_all_data_layers(spec: Dict[str, Any]) -> List[Dict[str, Any]]:
 
 def _get_mark_type(layer: Dict[str, Any]) -> str:
     # Check if layer has mark directly, otherwise get from first nested layer
-    if "mark" in layer:
-        mark = layer["mark"]
-    else:
-        # Get mark from first nested layer
-        nested_layers = layer.get("layer", [])
+    mark = layer.get("mark")
+    if mark is None:
+        nested_layers = layer.get("layer")
         if nested_layers:
             mark = nested_layers[0].get("mark")
-        else:
-            mark = None
 
     # Extract type from mark
     if isinstance(mark, str):
         return mark
-    elif isinstance(mark, dict) and mark.get("type"):
-        return mark["type"]
-    else:
-        return "bar"  # Default fallback
+    if isinstance(mark, dict):
+        type_val = mark.get("type")
+        if type_val:
+            return type_val
+    return "bar"  # Default fallback
 
 
 def _create_vega_legend_filter_name(encoding_type: str, param_name_suffix: str) -> str:
