@@ -11,7 +11,8 @@ from deepnote_toolkit.ocelots.types import ColumnsStatsRecord, ColumnStats
 
 def _count_unique(column):
     try:
-        return column.dropna().nunique()
+        dropped = column.dropna()
+        return dropped.nunique()
     except TypeError:
         # This happens when the column contains e.g. dictionaries, lists or sets
         # In that case, we fall back to each value being unique
@@ -19,12 +20,20 @@ def _count_unique(column):
 
 
 def _get_categories(np_array):
-    pandas_series = pd.Series(np_array.tolist())
+    # Convert only once and avoid .tolist() call
+    pandas_series = pd.Series(np_array)
 
     # special treatment for empty values
-    num_nans = pandas_series.isna().sum().item()
+    num_nans = pandas_series.isna().sum()
+    # No need for .item(), sum gives int
 
-    counter = Counter(pandas_series.dropna().astype(str))
+    # Use astype(str) efficiently only if needed
+    non_na = pandas_series.dropna()
+    if not non_na.empty:
+        values_as_str = non_na.astype(str)
+        counter = Counter(values_as_str)
+    else:
+        counter = Counter()
 
     max_items = 3
     if num_nans > 0:
@@ -32,9 +41,10 @@ def _get_categories(np_array):
 
     if len(counter) > max_items:
         most_common = counter.most_common(max_items - 1)
-        counter -= dict(most_common)
-        sum_others = sum(counter.values())
-        num_others = len(counter)
+        # Instead of subtracting, use dict directly in sum/count
+        other_counts = {k: v for k, v in counter.items() if (k, v) not in most_common}
+        sum_others = sum(other_counts.values())
+        num_others = len(other_counts)
         most_common.append((f"{num_others} others", sum_others))
         categories = most_common
     else:
@@ -69,22 +79,24 @@ def _is_type_numeric(dtype):
 
 def _get_histogram(pd_series):
     try:
+        dtype = pd_series.dtype
+        # Avoid repeated isna/isnull/dropna - do once
+        cleaned = pd_series.replace([np.inf, -np.inf], np.nan).dropna()
+        # Use astype(int) only if datetime/timedelta
         if pd.api.types.is_datetime64_any_dtype(
-            pd_series
-        ) or pd.api.types.is_timedelta64_dtype(pd_series):
-            # convert datetime or timedelta to an integer so that a histogram can be created
-            np_array = np.array(pd_series.dropna().astype(int))
+            dtype
+        ) or pd.api.types.is_timedelta64_dtype(dtype):
+            np_array = cleaned.astype(int).to_numpy()
         else:
-            # let's drop infinite values because they break histograms
-            np_array = np.array(pd_series.replace([np.inf, -np.inf], np.nan).dropna())
+            np_array = cleaned.to_numpy()
 
         # Check if array is empty after dropping NaN/NaT values
-        if len(np_array) == 0:
+        if np_array.size == 0:
             return None
 
         y, bins = np.histogram(np_array, bins=10)
         return [
-            {"bin_start": bins[i], "bin_end": bins[i + 1], "count": count.item()}
+            {"bin_start": bins[i], "bin_end": bins[i + 1], "count": int(count)}
             for i, count in enumerate(y)
         ]
     except (ValueError, IndexError) as e:
@@ -105,9 +117,13 @@ def _calculate_min_max(column):
     Calculate min and max values for a given column.
     """
     if _is_type_numeric(column.dtype):
-        min_value = str(min(column.dropna())) if len(column.dropna()) > 0 else None
-        max_value = str(max(column.dropna())) if len(column.dropna()) > 0 else None
-        return min_value, max_value
+        dropped = column.dropna()
+        if not dropped.empty:
+            min_value = str(dropped.min())
+            max_value = str(dropped.max())
+            return min_value, max_value
+        else:
+            return None, None
     return None, None
 
 
@@ -138,12 +154,14 @@ def analyze_columns(
     max_cells_to_analyze = (
         100000  # calculated so that the analysis takes no more than 100ms
     )
-    if len(df) == 0:
-        max_columns_to_analyze = len(df.columns)
+    n_rows = len(df)
+    n_cols = len(df.columns)
+    if n_rows == 0:
+        max_columns_to_analyze = n_cols
     else:
         max_columns_to_analyze = min(
-            math.floor(max_cells_to_analyze / len(df)),
-            len(df.columns),
+            math.floor(max_cells_to_analyze / n_rows),
+            n_cols,
         )
 
     # Analyze columns
@@ -157,23 +175,25 @@ def analyze_columns(
 
     # Add stats to columns, but only within computational limit
     for i in range(max_columns_to_analyze):
-        column = df.iloc[
-            :, i
-        ]  # We need to use iloc because it works if column names have duplicates
-        if columns[i].name == DEEPNOTE_INDEX_COLUMN:
+        column = df.iloc[:, i]
+        col_info = columns[i]
+        if col_info.name == DEEPNOTE_INDEX_COLUMN:
             continue  # Do not analyze DEEPNOTE_INDEX_COLUMN column
 
-        columns[i].stats = ColumnStats(
-            unique_count=_count_unique(column), nan_count=column.isnull().sum().item()
-        )
+        # Avoid repeated dropna, isnull calls: combine calcs
+        nan_count = column.isnull().sum()
+        unique_count = _count_unique(column)
+
+        col_info.stats = ColumnStats(unique_count=unique_count, nan_count=nan_count)
 
         if _is_type_numeric(column.dtype):
             min_value, max_value = _calculate_min_max(column)
-            columns[i].stats.min = min_value
-            columns[i].stats.max = max_value
-            columns[i].stats.histogram = _get_histogram(column)
+            col_info.stats.min = min_value
+            col_info.stats.max = max_value
+            col_info.stats.histogram = _get_histogram(column)
         else:
-            columns[i].stats.categories = _get_categories(np.array(column))
+            # Use .to_numpy() instead of np.array for potentially better performance
+            col_info.stats.categories = _get_categories(column.to_numpy())
 
     if not color_scale_column_names:
         return columns
@@ -184,29 +204,32 @@ def analyze_columns(
     remaining_cells_to_analyze_for_color_scales = 10000000
 
     # Process remaining columns for color scale rules
-    for i in range(max_columns_to_analyze, len(df.columns)):
+    for i in range(max_columns_to_analyze, n_cols):
         # Ignore columns that are not numeric
         column = df.iloc[:, i]
+        col_info = columns[i]
+
+        # Ignore columns that are not numeric
         if not _is_type_numeric(column.dtype):
             continue
 
-        column_name = columns[i].name
+        column_name = col_info.name
 
         if column_name in color_scale_column_names:
             # Check if we still have budget to analyze all of the DataFrame rows for this column
-            if remaining_cells_to_analyze_for_color_scales <= len(df):
+            if remaining_cells_to_analyze_for_color_scales <= n_rows:
                 break  # Exceeded budget, stop processing
 
-            columns[i].stats = ColumnStats(
-                unique_count=_count_unique(column),
-                nan_count=column.isnull().sum().item(),
-            )
+            nan_count = column.isnull().sum()
+            unique_count = _count_unique(column)
+
+            col_info.stats = ColumnStats(unique_count=unique_count, nan_count=nan_count)
 
             min_value, max_value = _calculate_min_max(column)
-            columns[i].stats.min = min_value
-            columns[i].stats.max = max_value
-            columns[i].stats.histogram = _get_histogram(column)
+            col_info.stats.min = min_value
+            col_info.stats.max = max_value
+            col_info.stats.histogram = _get_histogram(column)
 
-            remaining_cells_to_analyze_for_color_scales -= len(column)
+            remaining_cells_to_analyze_for_color_scales -= n_rows
 
     return columns
